@@ -36,3 +36,5 @@
 
 # Local files
 base_files/
+cclient
+server
