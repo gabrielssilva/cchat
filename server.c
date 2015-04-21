@@ -4,49 +4,78 @@
 #include <sys/types.h>
 #include <netdb.h>
 #include <unistd.h>
+#include "client_type.h"
+
+#pragma pack(1)
 
 #define BUFF_SIZE 1024
 
-void receive_messages(int client_socket_num) {
-    int active = 1;
-    while (active) {
-        fd_set fd_read;
-        FD_ZERO(&fd_read);
-        FD_SET(client_socket_num, &fd_read);
-        
-        select(client_socket_num+1, (fd_set*) &fd_read, (fd_set*) 0, (fd_set*) 0, NULL);
-        // Possible bug. Maybe use FD_ISSET?
 
-        char *message = malloc(BUFF_SIZE);
+void handle_client(int client_socket_num) {
+    char *message = malloc(BUFF_SIZE);
 
-        if (recv(client_socket_num, message, BUFF_SIZE, 0) <= 0) {
-            free(message);
-            message = NULL;
+    if (recv(client_socket_num, message, BUFF_SIZE, 0) <= 0) {
+        free(message);
+        message = NULL;
             
-            printf("Client disconnected\n");
-            active = 0;
-        } else {
-            printf("%s\n", message);
+        printf("Client disconnected\n");
+        //close(client_socket_num);
+    } else {
+        printf("%s\n", message);
+    }
+}
+
+int wait_for_client(int server_socket_num, struct clients_t *clients) {
+    fd_set fd_read;
+    FD_ZERO(&fd_read);
+    FD_SET(server_socket_num, &fd_read);
+    
+    int max = server_socket_num;
+    for (int i=0; clients != NULL && i<clients->num_clients; i++) {
+        FD_SET(get_client(clients, i), &fd_read);
+        max = (get_client(clients, i) > max) ? get_client(clients, i) : max;
+    }
+    
+    select(max+1, (fd_set*) &fd_read, (fd_set*) 0, (fd_set*) 0, NULL);
+    
+    if (FD_ISSET(server_socket_num, &fd_read)){
+        return server_socket_num;
+    }
+
+    for (int i=0; clients != NULL && i<clients->num_clients; i++) {
+        int client_socket = get_client(clients, i);
+        if (FD_ISSET(client_socket, &fd_read)) {
+            return client_socket;
         }
     }
     
-    close(client_socket_num);
+    return -1;
 }
 
-int wait_for_clients(int socket_num) {
-    int client_socket_num;
+
+void watch_for_clients(int socket_num) {
+    struct clients_t *clients = NULL;
     
     if (listen(socket_num, 5) < 0) {
         perror("Error: couldn't listen for connections.");
         exit(-1);
     }
     
-    if ((client_socket_num = accept(socket_num, (struct sockaddr*)0, (socklen_t *) 0)) < 0) {
-        perror("Error: couldn't accept client connection.");
-        exit(-1);
+    while (1) {
+        int socket_ready = wait_for_client(socket_num, clients);
+        if (socket_ready == socket_num) {
+            int client_socket_num;
+            if ((client_socket_num = accept(socket_num, (struct sockaddr*)0, (socklen_t *) 0)) < 0) {
+                perror("Error: couldn't accept client connection.");
+                exit(-1);
+            }
+            
+            add_client(&clients, client_socket_num);
+            printf("client connected\n");
+        } else {
+            handle_client(socket_ready);
+        }
     }
-
-    return client_socket_num;
 }
 
 
@@ -85,9 +114,8 @@ int get_server_socket() {
 int main(int argc, char **argv) {
     int socket_num = get_server_socket();
     setup_server(socket_num);
-
-    int client_socket_num = wait_for_clients(socket_num);
-    receive_messages(client_socket_num);
+    
+    watch_for_clients(socket_num);
     
     close(socket_num);
 }
