@@ -14,7 +14,13 @@
 void handle_client(int client_socket_num) {
     char *message = malloc(BUFF_SIZE);
 
-    if (recv(client_socket_num, message, BUFF_SIZE, 0) <= 0) {
+    int recv_result = recv(client_socket_num, message, BUFF_SIZE, 0);
+    if (recv_result < 0) {
+        free(message);
+        message = NULL;
+        
+        perror("Couldn't retrieve the message.");
+    } else if (recv_result == 0) {
         free(message);
         message = NULL;
             
@@ -57,7 +63,7 @@ void watch_for_clients(int socket_num) {
     struct clients_t *clients = NULL;
     
     if (listen(socket_num, 5) < 0) {
-        perror("Error: couldn't listen for connections.");
+        perror("Couldn't listen for connections.");
         exit(-1);
     }
     
@@ -65,11 +71,10 @@ void watch_for_clients(int socket_num) {
         int socket_ready = wait_for_client(socket_num, clients);
         if (socket_ready == socket_num) {
             int client_socket_num;
-            if ((client_socket_num = accept(socket_num, (struct sockaddr*)0, (socklen_t *) 0)) < 0) {
-                perror("Error: couldn't accept client connection.");
+            if ((client_socket_num = accept(socket_num, (struct sockaddr*) 0, (socklen_t*) 0)) < 0) {
+                perror("Couldn't accept client connection.");
                 exit(-1);
             }
-            
             add_client(&clients, client_socket_num);
             printf("client connected\n");
         } else {
@@ -88,12 +93,12 @@ void setup_server(int socket_num) {
     local_addr.sin_port = htons(0);
     
     if (bind(socket_num, (struct sockaddr*) &local_addr, sizeof(local_addr)) < 0) {
-        perror("Error: couldn't setup server port.");
+        perror("Couldn't setup server port.");
         exit(-1);
     }
     
     if (getsockname(socket_num, (struct sockaddr*) &local_addr, &local_len) < 0) {
-        perror("Error: couldn't retrieve server name.");
+        perror("Couldn't retrieve server name.");
         exit(-1);
     }
     
@@ -104,7 +109,7 @@ int get_server_socket() {
     int socket_num;
     
     if((socket_num = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        perror("Error: couldn't create socket.");
+        perror("Couldn't create socket.");
         exit(-1);
     }
     
