@@ -59,6 +59,24 @@ int wait_for_client(int server_socket_num, struct clients_t *clients) {
 }
 
 
+void connect_to_client(struct sockaddr_in *client_addr, socklen_t addrlen) {
+    
+    //memcpy((char*) &host_addr.sin_addr, (char*) host->h_addr, host->h_length);
+    client_addr->sin_port = htons(64328);
+    client_addr->sin_family = AF_INET;
+    int socket_num;
+    
+    if ((socket_num = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        perror("Error: couldn't create socket.");
+        exit(-1);
+    }
+    
+    if (connect(socket_num, (struct sockaddr*) client_addr, addrlen) < 0) {
+        perror("Couldn't connect to client");
+        exit(-1);
+    }
+}
+
 void watch_for_clients(int socket_num) {
     struct clients_t *clients = NULL;
     
@@ -71,10 +89,15 @@ void watch_for_clients(int socket_num) {
         int socket_ready = wait_for_client(socket_num, clients);
         if (socket_ready == socket_num) {
             int client_socket_num;
-            if ((client_socket_num = accept(socket_num, (struct sockaddr*) 0, (socklen_t*) 0)) < 0) {
+            
+            struct sockaddr_in client_addr;
+            socklen_t addrlen = sizeof(client_addr);
+            
+            if ((client_socket_num = accept(socket_num, (struct sockaddr*)&client_addr, &addrlen)) < 0) {
                 perror("Couldn't accept client connection.");
                 exit(-1);
             }
+            connect_to_client(&client_addr, addrlen);
             add_client(&clients, client_socket_num);
             printf("client connected\n");
         } else {
