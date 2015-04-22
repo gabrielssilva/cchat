@@ -12,18 +12,12 @@
 
 
 void handle_client(int client_socket_num) {
-    char *message = malloc(BUFF_SIZE);
+    char message[BUFF_SIZE];
 
     int recv_result = recv(client_socket_num, message, BUFF_SIZE, 0);
     if (recv_result < 0) {
-        free(message);
-        message = NULL;
-        
         perror("Couldn't retrieve the message.");
     } else if (recv_result == 0) {
-        free(message);
-        message = NULL;
-            
         printf("Client disconnected\n");
         //close(client_socket_num);
     } else {

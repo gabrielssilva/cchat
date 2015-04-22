@@ -26,14 +26,7 @@ int wait_for_message(char *message, int server_socket_num) {
     
     if (FD_ISSET(STDIN_FILENO, &fd_read)) {
         if (read(STDIN_FILENO, message, BUFF_SIZE) < 0) {
-            free(message);
-            message = NULL;
             perror("Couldn't read the message from stdin");
-        }
-    
-        if (strlen(message) > MAX_LENGTH) {
-            printf("The message is too long (max: 1000 bytes)");
-            message = NULL;
         }
 
         return STDIN_READY;
@@ -47,11 +40,18 @@ int wait_for_message(char *message, int server_socket_num) {
 void watch_for_messages(int socket_num) {
     int active = 1;
     while (active) {
-        char *message = malloc(BUFF_SIZE); // remove malloc
+        char message[BUFF_SIZE];
+        memset(message, 0, BUFF_SIZE);
+        
         int socket_ready = wait_for_message(message, socket_num);
     
-        if (socket_ready == STDIN_READY && message != NULL) {
-            send(socket_num, message, BUFF_SIZE, 0);
+        if (socket_ready == STDIN_READY) {
+            if (strlen(message) > MAX_LENGTH) {
+                printf("The message is too long (max: 1000 bytes) %lu", strlen(message));
+            } else {
+                printf("Sending message %lu\n", strlen(message));
+                send(socket_num, message, BUFF_SIZE, 0);
+            }
         } else if (socket_ready == SERVER_READY) {
             int recv_result = recv(socket_num, message, BUFF_SIZE, 0);
             
