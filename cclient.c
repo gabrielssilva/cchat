@@ -9,6 +9,8 @@
 
 #define BUFF_SIZE 1024
 #define MAX_LENGTH 1000
+#define STDIN_READY 111
+#define SERVER_READY 333
 
 
 int wait_for_message(char *message, int server_socket_num) {
@@ -33,25 +35,25 @@ int wait_for_message(char *message, int server_socket_num) {
             printf("The message is too long (max: 1000 bytes)");
             message = NULL;
         }
-        printf("here\n");
-        return STDIN_FILENO;
+
+        return STDIN_READY;
     } else if (FD_ISSET(server_socket_num, &fd_read)) {
-        return server_socket_num;
+        return SERVER_READY;
     }
     
     return -1;
 }
 
-void watch_for_messages(int socket_num, int server_socket_num) {
+void watch_for_messages(int socket_num) {
     int active = 1;
     while (active) {
-        char *message = malloc(BUFF_SIZE);
-        int socket_ready = wait_for_message(message, server_socket_num);
-        
-        if (socket_ready == STDIN_FILENO && message != NULL) {
+        char *message = malloc(BUFF_SIZE); // remove malloc
+        int socket_ready = wait_for_message(message, socket_num);
+    
+        if (socket_ready == STDIN_READY && message != NULL) {
             send(socket_num, message, BUFF_SIZE, 0);
-        } else if (socket_ready == server_socket_num) {
-            int recv_result = recv(server_socket_num, message, BUFF_SIZE, 0);
+        } else if (socket_ready == SERVER_READY) {
+            int recv_result = recv(socket_num, message, BUFF_SIZE, 0);
             
             if (recv_result < 0) {
                 perror("Couldn't retrieve the message");
@@ -76,35 +78,7 @@ int get_client_socket() {
     return socket_num;
 }
 
-int accept_server() {
-    int socket_num = get_client_socket();
-    struct sockaddr_in local_addr;
-    socklen_t local_len = sizeof(local_addr);
-    
-    local_addr.sin_family = AF_INET;
-    local_addr.sin_addr.s_addr = INADDR_ANY;
-    local_addr.sin_port = htons(64328);
-    
-    if (bind(socket_num, (struct sockaddr*) &local_addr, sizeof(local_addr)) < 0) {
-        perror("Couldn't setup server port.");
-        exit(-1);
-    }
-
-    if (listen(socket_num, 5) < 0) {
-        perror("Couldn't listen for connections.");
-        exit(-1);
-    }
-    
-    int server_socket;
-    if ((server_socket = accept(socket_num, (struct sockaddr*)0, (socklen_t *) 0)) < 0) {
-        perror("Couldn't accept server connection.");
-        exit(-1);
-    }
-
-    return server_socket;
-}
-
-int connect_to_server(int socket_num, char *host_name, char *port) {
+void connect_to_server(int socket_num, char *host_name, char *port) {
     struct hostent *host;
     struct sockaddr_in host_addr;
     
@@ -121,14 +95,12 @@ int connect_to_server(int socket_num, char *host_name, char *port) {
         perror("Couldn't connect to server");
         exit(-1);
     }
-    
-    return accept_server();
 }
 
 
 
 int main(int argc, char **argv) {
     int socket_num = get_client_socket();
-    int server_socket_num = connect_to_server(socket_num, argv[1], argv[2]);
-    watch_for_messages(socket_num, server_socket_num);
+    connect_to_server(socket_num, argv[1], argv[2]);
+    watch_for_messages(socket_num);
 }
