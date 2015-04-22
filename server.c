@@ -79,13 +79,13 @@ void watch_for_clients(int socket_num) {
 }
 
 
-void setup_server(int socket_num) {
+void setup_server(int socket_num, int port_number) {
     struct sockaddr_in local_addr;
     socklen_t local_len = sizeof(local_addr);
     
     local_addr.sin_family = AF_INET;
     local_addr.sin_addr.s_addr = INADDR_ANY;
-    local_addr.sin_port = htons(0);
+    local_addr.sin_port = htons(port_number);
     
     if (bind(socket_num, (struct sockaddr*) &local_addr, sizeof(local_addr)) < 0) {
         perror("Couldn't setup server port.");
@@ -112,8 +112,17 @@ int get_server_socket() {
 }
 
 int main(int argc, char **argv) {
+    int port_number = 0;
+    
+    if (argc > 2) {
+        printf("\nUsage: server <optional: port number>\n\n");
+        exit(-1);
+    } else if (argc == 2) {
+        port_number = atoi(argv[1]);
+    }
+    
     int socket_num = get_server_socket();
-    setup_server(socket_num);
+    setup_server(socket_num, port_number);
     
     watch_for_clients(socket_num);
     
