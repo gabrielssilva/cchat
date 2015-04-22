@@ -11,7 +11,7 @@
 #define BUFF_SIZE 1024
 
 
-void handle_client(int client_socket_num) {
+void handle_client(int client_socket_num, struct clients_t *clients) {
     char message[BUFF_SIZE];
 
     int recv_result = recv(client_socket_num, message, BUFF_SIZE, 0);
@@ -19,7 +19,8 @@ void handle_client(int client_socket_num) {
         perror("Couldn't retrieve the message.");
     } else if (recv_result == 0) {
         printf("Client disconnected\n");
-        //close(client_socket_num);
+        remove_client(&clients, client_socket_num);
+        close(client_socket_num);
     } else {
         printf("%s\n", message);
     }
@@ -72,7 +73,7 @@ void watch_for_clients(int socket_num) {
             add_client(&clients, client_socket_num);
             printf("client connected\n");
         } else {
-            handle_client(socket_ready);
+            handle_client(socket_ready, clients);
         }
     }
 }

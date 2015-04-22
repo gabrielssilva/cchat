@@ -15,6 +15,8 @@ struct clients_t {
 };
 
 void add_client(struct clients_t**, int);
+void remove_client(struct clients_t**, int);
 int get_client(struct clients_t*, int);
+void print(struct clients_t*);
 
 #endif
