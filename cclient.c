@@ -16,7 +16,7 @@ void send_message(int socket_num, unsigned long seq_number, char *src_handle,
                   char *dst_handle, char *message) {
     struct normal_header header;
     header.seq_number = htonl(seq_number);
-    header.flag = 5;
+    header.flag = CLIENT_MESSAGE;
     uint8_t src_handle_len = strlen(src_handle);
     uint8_t dst_handle_len = strlen(dst_handle);
     
@@ -40,7 +40,7 @@ void send_broadcast(int socket_num, unsigned long seq_number, char *src_handle,
                     char *message) {
     struct normal_header header;
     header.seq_number = htonl(seq_number);
-    header.flag = 4;
+    header.flag = CLIENT_BROADCAST;
     uint8_t src_handle_len = strlen(src_handle);
     
     char packet[HEADER_LENGTH + HANDLE_LENGTH + src_handle_len + MESSAGE_LENGTH];
@@ -53,7 +53,7 @@ void send_broadcast(int socket_num, unsigned long seq_number, char *src_handle,
     send(socket_num, packet, sizeof(packet), 0);
 }
 
-int handle_user_input(int socket_num) {
+int handle_user_input(int socket_num, char *src_handle) {
     // If there's more time, doa further validation on the input
     char message[BUFF_SIZE];
     memset(message, 0, BUFF_SIZE);
@@ -70,10 +70,10 @@ int handle_user_input(int socket_num) {
     char *command = strtok(message, " ");
     
     if (strcasecmp(command, "%M") == 0) {
-        char *handle = strtok(NULL, " ");
+        char *dst_handle = strtok(NULL, " ");
         char *msg = strtok(NULL, "\n");
         
-        if (strcmp(handle, "\n") == 0) {
+        if (strcmp(dst_handle, "\n") == 0) {
             return -1;
         }
         char empty_msg[] = "\n";
@@ -83,12 +83,12 @@ int handle_user_input(int socket_num) {
         if (strlen(msg) > MAX_LENGTH) {
             printf("The message is too long (max: 1000 bytes) %lu", strlen(msg));
         } else {
-            send_message(socket_num, 1, "me", handle, msg);
+            send_message(socket_num, 1, src_handle, dst_handle, msg);
         }
     } else if (strcasecmp(command, "%B") == 0) {
         // Send empty message!
         char *msg = strtok(NULL, "");
-        send_broadcast(socket_num, 1, "me", msg);
+        send_broadcast(socket_num, 1, src_handle, msg);
     } else if (strcasecmp(strtok(command, "\n"), "%L") == 0) {
         printf("handles\n");
     } else if (strcasecmp(strtok(command, "\n"), "%E") == 0) {
@@ -118,7 +118,7 @@ int wait_for_message(int server_socket_num) {
     return -1;
 }
 
-void watch_for_messages(int socket_num) {
+void watch_for_messages(int socket_num, char *handle) {
     int active = 1;
     while (active) {
         printf("$: ");
@@ -126,7 +126,7 @@ void watch_for_messages(int socket_num) {
         
         int socket_ready = wait_for_message(socket_num);
         if (socket_ready == STDIN_READY) {
-            if (handle_user_input(socket_num) < 0) {
+            if (handle_user_input(socket_num, handle) < 0) {
                 printf("Invalid command\n");
             }
         } else if (socket_ready == SERVER_READY) {
@@ -158,7 +158,32 @@ int get_client_socket() {
     return socket_num;
 }
 
-void connect_to_server(int socket_num, char *host_name, char *port) {
+void validate_handle(int socket_num, char *handle) {
+    struct normal_header header;
+    header.seq_number = htonl(0);
+    header.flag = CLIENT_INITIAL_PACKET;
+    
+    uint8_t handle_length = strlen(handle);
+    char packet[HEADER_LENGTH + HANDLE_LENGTH + handle_length];
+    memcpy(packet, &header, HEADER_LENGTH);
+    memcpy(packet+HEADER_LENGTH, &handle_length, HANDLE_LENGTH);
+    memcpy(packet+HEADER_LENGTH+HANDLE_LENGTH, handle, handle_length);
+    send(socket_num, packet, sizeof(packet), 0);
+    
+    char response[HEADER_LENGTH];
+    if (recv(socket_num, response, HEADER_LENGTH, 0) < 0) {
+        perror("Couldn't get server response");
+        exit(-1);
+    }
+    
+    struct normal_header *rcv_header = (struct normal_header*) response;
+    if (rcv_header->flag == SERVER_REJECT_HANDLE) {
+        printf("Handle already in use: %s\n", handle);
+        exit(-1);
+    }
+}
+
+void connect_to_server(int socket_num, char *handle, char *host_name, char *port) {
     struct hostent *host;
     struct sockaddr_in host_addr;
     
@@ -175,17 +200,19 @@ void connect_to_server(int socket_num, char *host_name, char *port) {
         perror("Couldn't connect to server");
         exit(-1);
     }
+    
+    validate_handle(socket_num, handle);
 }
 
 
 
 int main(int argc, char **argv) {
-    if (argc != 3) {
-        printf("\nUsage: cclient <server name/address> <port number>\n\n");
+    if (argc != 4) {
+        printf("\nUsage: cclient <handle> <server name/address> <port number>\n\n");
         exit(-1);
     }
     
     int socket_num = get_client_socket();
-    connect_to_server(socket_num, argv[1], argv[2]);
-    watch_for_messages(socket_num);
+    connect_to_server(socket_num, argv[1], argv[2], argv[3]);
+    watch_for_messages(socket_num, argv[1]);
 }

@@ -14,6 +14,7 @@ void add_client(struct clients_t **clients, int fd) {
     check_list(clients);
     
     struct client_t *new_client = (struct client_t*) malloc(sizeof(struct client_t));
+    memset(new_client->handle, 0, HANDLE_MAX_LENGTH);
     new_client->fd = fd;
     new_client->next = NULL;
     
@@ -28,6 +29,17 @@ void add_client(struct clients_t **clients, int fd) {
     }
     
     (*clients)->num_clients++;
+}
+
+void add_handle(struct clients_t **clients, int fd, char *handle, uint8_t handle_len) {
+    struct client_t *temp = (*clients)->client;
+    while (temp != NULL) {
+        if (temp->fd == fd) {
+            memcpy(temp->handle, handle, handle_len);
+            break;
+        }
+        temp = temp->next;
+    }
 }
 
 void remove_client(struct clients_t **clients, int fd) {

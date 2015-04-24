@@ -1,6 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -8,6 +5,15 @@
 #include "client_type.h"
 #include "packets.h"
 
+void send_simple_packet(int socket_num, int seq_number, int flag) {
+    struct normal_header header;
+    header.seq_number = htonl(seq_number);
+    header.flag = flag;
+    
+    char packet[HEADER_LENGTH];
+    memcpy(packet, &header, HEADER_LENGTH);
+    send(socket_num, packet, sizeof(packet), 0);
+}
 
 void handle_message_packet(char *packet) {
     uint8_t dst_handle_length = *(packet + HEADER_LENGTH);
@@ -22,13 +28,35 @@ void handle_message_packet(char *packet) {
     printf("From %s to %s: %s\n", src_handle, dst_handle, message);
 }
 
-void handle_packet(char *packet) {
+int check_handle(int socket_num, char *packet, struct clients_t *clients) {
+    uint8_t handle_length = *(packet + HEADER_LENGTH);
+    char *handle = (packet + HEADER_LENGTH + HANDLE_LENGTH);
+    struct client_t *temp = clients->client;
+    
+    while (temp != NULL) {
+        if (strncmp(handle, temp->handle, handle_length) == 0) {
+            return SERVER_REJECT_HANDLE;
+        }
+        temp = temp->next;
+    }
+    
+    add_handle(&clients, socket_num, handle, handle_length);
+    return SERVER_ACCEPT_HANDLE;
+}
+
+void handle_packet(int socket_num, struct clients_t *clients, char *packet) {
     struct normal_header header;
     memcpy(&header, packet, HEADER_LENGTH);
     
-    if (header.flag == 4) {
+    if (header.flag == CLIENT_INITIAL_PACKET) {
+        if (check_handle(socket_num, packet, clients) == SERVER_ACCEPT_HANDLE) {
+            send_simple_packet(socket_num, 0, SERVER_ACCEPT_HANDLE);
+        } else {
+            send_simple_packet(socket_num, 0, SERVER_REJECT_HANDLE);
+        }
+    } else if (header.flag == CLIENT_BROADCAST) {
         printf("Broadcast received\n");
-    } else if (header.flag == 5) {
+    } else if (header.flag == CLIENT_MESSAGE) {
         handle_message_packet(packet);
     }
 }
@@ -44,7 +72,7 @@ void handle_client(int client_socket_num, struct clients_t *clients) {
         remove_client(&clients, client_socket_num);
         close(client_socket_num);
     } else {
-        handle_packet(packet);
+        handle_packet(client_socket_num, clients, packet);
     }
 }
 
