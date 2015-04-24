@@ -5,10 +5,20 @@
 #include "client_type.h"
 #include "packets.h"
 
-void send_simple_packet(int socket_num, int seq_number, int flag) {
+
+struct normal_header build_header(int flag) {
+    static uint32_t seq_number = 0;
     struct normal_header header;
+    
     header.seq_number = htonl(seq_number);
     header.flag = flag;
+    
+    seq_number++;
+    return header;
+}
+
+void send_simple_packet(int socket_num, int flag) {
+    struct normal_header header = build_header(flag);
     
     char packet[HEADER_LENGTH];
     memcpy(packet, &header, HEADER_LENGTH);
@@ -50,9 +60,9 @@ void handle_packet(int socket_num, struct clients_t *clients, char *packet) {
     
     if (header.flag == CLIENT_INITIAL_PACKET) {
         if (check_handle(socket_num, packet, clients) == SERVER_ACCEPT_HANDLE) {
-            send_simple_packet(socket_num, 0, SERVER_ACCEPT_HANDLE);
+            send_simple_packet(socket_num, SERVER_ACCEPT_HANDLE);
         } else {
-            send_simple_packet(socket_num, 0, SERVER_REJECT_HANDLE);
+            send_simple_packet(socket_num, SERVER_REJECT_HANDLE);
         }
     } else if (header.flag == CLIENT_BROADCAST) {
         printf("Broadcast received\n");

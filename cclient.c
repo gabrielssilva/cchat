@@ -7,16 +7,23 @@
 #include <netdb.h>
 #include "packets.h"
 
-#define MAX_LENGTH 1000
 #define STDIN_READY 111
 #define SERVER_READY 333
 
-
-void send_message(int socket_num, unsigned long seq_number, char *src_handle,
-                  char *dst_handle, char *message) {
+struct normal_header build_header(int flag) {
+    static uint32_t seq_number = 0;
     struct normal_header header;
+    
     header.seq_number = htonl(seq_number);
-    header.flag = CLIENT_MESSAGE;
+    header.flag = flag;
+    
+    seq_number++;
+    return header;
+}
+
+void send_message(int socket_num, char *src_handle,
+                  char *dst_handle, char *message) {
+    struct normal_header header = build_header(CLIENT_MESSAGE);
     uint8_t src_handle_len = strlen(src_handle);
     uint8_t dst_handle_len = strlen(dst_handle);
     
@@ -36,11 +43,8 @@ void send_message(int socket_num, unsigned long seq_number, char *src_handle,
     send(socket_num, packet, sizeof(packet), 0);
 }
 
-void send_broadcast(int socket_num, unsigned long seq_number, char *src_handle,
-                    char *message) {
-    struct normal_header header;
-    header.seq_number = htonl(seq_number);
-    header.flag = CLIENT_BROADCAST;
+void send_broadcast(int socket_num, char *src_handle, char *message) {
+    struct normal_header header = build_header(CLIENT_BROADCAST);
     uint8_t src_handle_len = strlen(src_handle);
     
     char packet[HEADER_LENGTH + HANDLE_LENGTH + src_handle_len + MESSAGE_LENGTH];
@@ -80,15 +84,15 @@ int handle_user_input(int socket_num, char *src_handle) {
         if (msg == NULL) {
             msg = empty_msg;
         }
-        if (strlen(msg) > MAX_LENGTH) {
-            printf("The message is too long (max: 1000 bytes) %lu", strlen(msg));
+        if (strlen(msg) > MESSAGE_LENGTH) {
+            printf("Error, message too long, message length is: %lu", strlen(msg));
         } else {
-            send_message(socket_num, 1, src_handle, dst_handle, msg);
+            send_message(socket_num, src_handle, dst_handle, msg);
         }
     } else if (strcasecmp(command, "%B") == 0) {
         // Send empty message!
         char *msg = strtok(NULL, "");
-        send_broadcast(socket_num, 1, src_handle, msg);
+        send_broadcast(socket_num, src_handle, msg);
     } else if (strcasecmp(strtok(command, "\n"), "%L") == 0) {
         printf("handles\n");
     } else if (strcasecmp(strtok(command, "\n"), "%E") == 0) {
@@ -159,9 +163,7 @@ int get_client_socket() {
 }
 
 void validate_handle(int socket_num, char *handle) {
-    struct normal_header header;
-    header.seq_number = htonl(0);
-    header.flag = CLIENT_INITIAL_PACKET;
+    struct normal_header header = build_header(CLIENT_INITIAL_PACKET);
     
     uint8_t handle_length = strlen(handle);
     char packet[HEADER_LENGTH + HANDLE_LENGTH + handle_length];
@@ -209,6 +211,11 @@ void connect_to_server(int socket_num, char *handle, char *host_name, char *port
 int main(int argc, char **argv) {
     if (argc != 4) {
         printf("\nUsage: cclient <handle> <server name/address> <port number>\n\n");
+        exit(-1);
+    }
+    
+    if (strlen(argv[1]) > HANDLE_MAX_LENGTH) {
+        printf("Error, handle too long, handle length is: %lu\n", strlen(argv[1]));
         exit(-1);
     }
     
