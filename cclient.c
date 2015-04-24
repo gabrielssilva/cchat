@@ -2,16 +2,56 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <sys/select.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <netdb.h>
+#include "packets.h"
 
-#define BUFF_SIZE 1024
 #define MAX_LENGTH 1000
 #define STDIN_READY 111
 #define SERVER_READY 333
 
+
+void send_message(int socket_num, unsigned long seq_number, char *src_handle,
+                  char *dst_handle, char *message) {
+    struct normal_header header;
+    header.seq_number = htonl(seq_number);
+    header.flag = 5;
+    uint8_t src_handle_len = strlen(src_handle);
+    uint8_t dst_handle_len = strlen(dst_handle);
+    
+    char packet[HEADER_LENGTH + HANDLE_LENGTH + dst_handle_len
+                + HANDLE_LENGTH + src_handle_len + MESSAGE_LENGTH];
+    
+    memcpy(packet, &header, HEADER_LENGTH);
+    memcpy(packet+HEADER_LENGTH, &dst_handle_len, HANDLE_LENGTH);
+    memcpy(packet+HEADER_LENGTH+HANDLE_LENGTH, dst_handle, dst_handle_len);
+    memcpy(packet+HEADER_LENGTH+HANDLE_LENGTH+dst_handle_len,
+           &src_handle_len, HANDLE_LENGTH);
+    memcpy(packet+HEADER_LENGTH+HANDLE_LENGTH+dst_handle_len+HANDLE_LENGTH,
+           src_handle, src_handle_len);
+    memcpy(packet+HEADER_LENGTH+HANDLE_LENGTH+dst_handle_len+HANDLE_LENGTH+src_handle_len,
+           message, MESSAGE_LENGTH);
+    
+    send(socket_num, packet, sizeof(packet), 0);
+}
+
+void send_broadcast(int socket_num, unsigned long seq_number, char *src_handle,
+                    char *message) {
+    struct normal_header header;
+    header.seq_number = htonl(seq_number);
+    header.flag = 4;
+    uint8_t src_handle_len = strlen(src_handle);
+    
+    char packet[HEADER_LENGTH + HANDLE_LENGTH + src_handle_len + MESSAGE_LENGTH];
+    memcpy(packet, &header, HEADER_LENGTH);
+    memcpy(packet+HEADER_LENGTH, &src_handle_len, HANDLE_LENGTH);
+    memcpy(packet+HEADER_LENGTH+HANDLE_LENGTH, src_handle, src_handle_len);
+    memcpy(packet+HEADER_LENGTH+HANDLE_LENGTH+src_handle_len,
+           message, MESSAGE_LENGTH);
+    
+    send(socket_num, packet, sizeof(packet), 0);
+}
 
 int handle_user_input(int socket_num) {
     // If there's more time, doa further validation on the input
@@ -20,33 +60,35 @@ int handle_user_input(int socket_num) {
 
     if (read(STDIN_FILENO, message, BUFF_SIZE) < 0) {
         perror("Couldn't read from stdin");
+        return -1;
+    }
+    
+    if (strcmp(message, "\n") == 0) {
+        return -1;
     }
     
     char *command = strtok(message, " ");
-    char *handle = strtok(NULL, " ");
-    char *msg = strtok(NULL, "\n");
     
     if (strcasecmp(command, "%M") == 0) {
-        char empty_msg[] = "\n";
-        
+        char *handle = strtok(NULL, " ");
+        char *msg = strtok(NULL, "\n");
         
         if (strcmp(handle, "\n") == 0) {
             return -1;
         }
-        
+        char empty_msg[] = "\n";
         if (msg == NULL) {
             msg = empty_msg;
         }
-        
         if (strlen(msg) > MAX_LENGTH) {
             printf("The message is too long (max: 1000 bytes) %lu", strlen(msg));
         } else {
-            printf("Sending message %lu\n", strlen(msg));
-            send(socket_num, msg, BUFF_SIZE, 0);
+            send_message(socket_num, 1, "me", handle, msg);
         }
-    } else if (strcasecmp(strtok(command, "\n"), "%B") == 0) {
+    } else if (strcasecmp(command, "%B") == 0) {
+        // Send empty message!
         char *msg = strtok(NULL, "");
-        printf("broadcast\n");
+        send_broadcast(socket_num, 1, "me", msg);
     } else if (strcasecmp(strtok(command, "\n"), "%L") == 0) {
         printf("handles\n");
     } else if (strcasecmp(strtok(command, "\n"), "%E") == 0) {
@@ -96,7 +138,7 @@ void watch_for_messages(int socket_num) {
             if (recv_result < 0) {
                 perror("Couldn't retrieve the message");
             } else if (recv_result == 0) {
-                printf("Server disconnected.");
+                printf("\nServer disconnected.\n");
                 active = 0;
             }
             

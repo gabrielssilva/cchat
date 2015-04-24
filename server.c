@@ -1,20 +1,42 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#include <netdb.h>
 #include <unistd.h>
+#include <netdb.h>
 #include "client_type.h"
+#include "packets.h"
 
-#pragma pack(1)
 
-#define BUFF_SIZE 1024
+void handle_message_packet(char *packet) {
+    uint8_t dst_handle_length = *(packet + HEADER_LENGTH);
+    char *dst_handle = (packet + HEADER_LENGTH + HANDLE_LENGTH);
+    uint8_t src_handle_length = *(packet + HEADER_LENGTH + HANDLE_LENGTH
+                                  + dst_handle_length);
+    char *src_handle = (packet + HEADER_LENGTH + HANDLE_LENGTH
+                        + dst_handle_length + HANDLE_LENGTH);
+    char *message = (packet + HEADER_LENGTH + HANDLE_LENGTH + dst_handle_length
+                     + HANDLE_LENGTH + src_handle_length);
+    
+    printf("From %s to %s: %s\n", src_handle, dst_handle, message);
+}
 
+void handle_packet(char *packet) {
+    struct normal_header header;
+    memcpy(&header, packet, HEADER_LENGTH);
+    
+    if (header.flag == 4) {
+        printf("Broadcast received\n");
+    } else if (header.flag == 5) {
+        handle_message_packet(packet);
+    }
+}
 
 void handle_client(int client_socket_num, struct clients_t *clients) {
-    char message[BUFF_SIZE];
+    char packet[BUFF_SIZE];
 
-    int recv_result = recv(client_socket_num, message, BUFF_SIZE, 0);
+    int recv_result = recv(client_socket_num, packet, BUFF_SIZE, 0);
     if (recv_result < 0) {
         perror("Couldn't retrieve the message.");
     } else if (recv_result == 0) {
@@ -22,7 +44,7 @@ void handle_client(int client_socket_num, struct clients_t *clients) {
         remove_client(&clients, client_socket_num);
         close(client_socket_num);
     } else {
-        printf("%s\n", message);
+        handle_packet(packet);
     }
 }
 
