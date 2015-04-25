@@ -22,14 +22,13 @@ void send_simple_packet(int socket_num, uint8_t flag) {
     
     char packet[HEADER_LENGTH];
     memcpy(packet, &header, HEADER_LENGTH);
-    printf("Simple packet: %lu\n", sizeof(packet));
     send(socket_num, packet, sizeof(packet), 0);
 }
 
 int get_client_socket(struct clients_t *clients, char *handle, uint8_t handle_length) {
     struct client_t *temp = clients->client;
     while (temp != NULL) {
-        if (strncasecmp(handle, temp->handle, handle_length) == 0) {
+        if (strcmp(strndup(handle, handle_length), temp->handle) == 0) {
             return temp->fd;
         }
         temp = temp->next;
@@ -84,7 +83,6 @@ void handle_message_packet(char *packet, int src_socket, struct clients_t *clien
     // Respond to the client
     struct normal_header new_header = build_header(response_flag);
     memcpy(packet, &new_header, HEADER_LENGTH);
-    printf("responding to client: %d\n", offset);
     send(src_socket, packet, offset, 0);
 }
 
@@ -150,7 +148,6 @@ void handle_client(int client_socket_num, struct clients_t *clients) {
     if (recv_result < 0) {
         perror("Couldn't retrieve the message.");
     } else if (recv_result == 0) {
-        printf("Client disconnected\n");
         remove_client(&clients, client_socket_num);
         close(client_socket_num);
     } else {
@@ -204,7 +201,6 @@ void watch_for_clients(int socket_num) {
             }
             
             add_client(&clients, client_socket_num);
-            printf("client connected\n");
         } else {
             handle_client(socket_ready, clients);
         }
