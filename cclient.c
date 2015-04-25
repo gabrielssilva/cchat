@@ -107,7 +107,11 @@ int handle_user_input(int socket_num, char *src_handle) {
         if (msg == NULL) {
             msg = strdup("\n");
         }
-        send_broadcast(socket_num, src_handle, msg);
+        if (strlen(msg) > MESSAGE_LENGTH-1) {
+            printf("Error, message too long, message length is: %lu\n", strlen(msg)+1);
+        } else {
+            send_broadcast(socket_num, src_handle, msg);
+        }
         printf("$: ");
         fflush(stdout);
     } else if (strcasecmp(command, "%L") == 0) {
@@ -204,7 +208,7 @@ void handle_server_messages(int socket_num, char *packet) {
         fflush(stdout);
     } else if (header.flag == SERVER_HANDLE_ERROR) {
         recv(socket_num, packet, BUFF_SIZE-HEADER_LENGTH, 0);
-        uint8_t handle_length = *(packet + HEADER_LENGTH);
+        uint8_t handle_length = *(packet);
         char handle[handle_length+1];
         memcpy(handle, (packet + HANDLE_LENGTH), handle_length);
         handle[handle_length] = '\0';

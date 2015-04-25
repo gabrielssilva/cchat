@@ -52,8 +52,9 @@ int check_handle(int socket_num, char *packet, struct clients_t *clients) {
 void handle_broadcast_packet(char *packet, int src_socket, struct clients_t *clients) {
     struct client_t *temp = clients->client;
     uint8_t src_handle_length = *(packet + HEADER_LENGTH);
+    char *message = (packet + HEADER_LENGTH + HANDLE_LENGTH + src_handle_length);
     
-    while (temp != NULL) {
+    while ((strlen(message) < MESSAGE_LENGTH) && (temp != NULL)) {
         if (src_socket != temp->fd) {
             send(temp->fd, packet, (HEADER_LENGTH + HANDLE_LENGTH + src_handle_length
                                     + MESSAGE_LENGTH), 0);
