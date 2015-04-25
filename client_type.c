@@ -1,7 +1,5 @@
 #include "client_type.h"
 
-
-
 void check_list(struct clients_t **clients) {
     if (*clients == NULL) {
         *clients = (struct clients_t*) malloc(sizeof(struct clients_t));

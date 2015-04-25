@@ -10,7 +10,7 @@
 #define STDIN_READY 111
 #define SERVER_READY 333
 
-struct normal_header build_header(int flag) {
+struct normal_header build_header(uint8_t flag) {
     static uint32_t seq_number = 0;
     struct normal_header header;
     
@@ -57,6 +57,14 @@ void send_broadcast(int socket_num, char *src_handle, char *message) {
     send(socket_num, packet, sizeof(packet), 0);
 }
 
+void send_request(int socket_num, uint8_t flag) {
+    struct normal_header header = build_header(flag);
+    char packet[HEADER_LENGTH];
+    memcpy(packet, &header, HEADER_LENGTH);
+    
+    send(socket_num, packet, sizeof(packet), 0);
+}
+
 int handle_user_input(int socket_num, char *src_handle) {
     // If there's more time, doa further validation on the input
     char message[BUFF_SIZE];
@@ -89,14 +97,23 @@ int handle_user_input(int socket_num, char *src_handle) {
         } else {
             send_message(socket_num, src_handle, dst_handle, msg);
         }
+        
+        printf("$: ");
+        fflush(stdout);
     } else if (strcasecmp(command, "%B") == 0) {
         // Send empty message!
         char *msg = strtok(NULL, "");
         send_broadcast(socket_num, src_handle, msg);
+        
+        printf("$: ");
+        fflush(stdout);
     } else if (strcasecmp(strtok(command, "\n"), "%L") == 0) {
-        printf("handles\n");
+        send_request(socket_num, CLIENT_HANDLE_REQUEST);
+        
+        printf("$: ");
+        fflush(stdout);
     } else if (strcasecmp(strtok(command, "\n"), "%E") == 0) {
-        printf("exit\n");
+        send_request(socket_num, CLIENT_EXIT_REQUEST);
     } else {
         return -1;
     }
@@ -122,31 +139,106 @@ int wait_for_message(int server_socket_num) {
     return -1;
 }
 
-void watch_for_messages(int socket_num, char *handle) {
-    int active = 1;
-    while (active) {
+void print_broadcast(char *packet) {
+    uint8_t handle_length = *(packet + HEADER_LENGTH);
+    
+    char handle[handle_length+1];
+    memcpy(handle, (packet + HEADER_LENGTH + HANDLE_LENGTH), handle_length);
+    handle[handle_length] = '\0';
+    
+    char *message = (packet + HEADER_LENGTH + HANDLE_LENGTH + handle_length);
+    printf("\n%s: %s\n", handle, message);
+}
+
+void print_message(char *packet) {
+    uint8_t dst_handle_length = *(packet + HEADER_LENGTH);
+    uint8_t src_handle_length = *(packet + HEADER_LENGTH + HANDLE_LENGTH + dst_handle_length);
+    
+    char src_handle[src_handle_length+1];
+    memcpy(src_handle, (packet + HEADER_LENGTH + HANDLE_LENGTH
+                        + dst_handle_length + HANDLE_LENGTH), src_handle_length);
+    src_handle[src_handle_length] = '\0';
+    
+    char *message = (packet + HEADER_LENGTH + HANDLE_LENGTH + src_handle_length
+                     + HANDLE_LENGTH + src_handle_length);
+    
+    printf("\n%s: %s\n", src_handle, message);
+}
+
+void print_handles_list(int socket_num, char *packet) {
+    uint32_t num_handles = *(packet + HEADER_LENGTH);
+    
+    uint8_t i=0;
+    for (i=0; i<num_handles; i++) {
+        char handle_packet[HANDLE_LENGTH + HANDLE_MAX_LENGTH];
+        if (recv(socket_num, handle_packet, sizeof(handle_packet), 0) < 0) {
+            perror("Couldn't get server response");
+            exit(-1);
+        }
+        
+        uint8_t handle_length = *(handle_packet);
+        char handle[HANDLE_MAX_LENGTH];
+        memset(handle, 0, HANDLE_MAX_LENGTH);
+        memcpy(handle, (handle_packet + HANDLE_LENGTH), handle_length);
+        printf("%s\n", handle);
+    }
+}
+
+void handle_server_messages(int socket_num, char *packet) {
+    struct normal_header header;
+    memcpy(&header, packet, HEADER_LENGTH);
+    
+    if (header.flag == CLIENT_MESSAGE) {
+        print_message(packet);
         printf("$: ");
         fflush(stdout);
+    } else if (header.flag == CLIENT_BROADCAST) {
+        print_broadcast(packet);
+        printf("$: ");
+        fflush(stdout);
+    } else if (header.flag == SERVER_HANDLE_ERROR) {
+        uint8_t handle_length = *(packet + HEADER_LENGTH);
+        char handle[handle_length+1];
+        memcpy(handle, (packet + HEADER_LENGTH + HANDLE_LENGTH), handle_length);
+        handle[handle_length] = '\0';
         
+        printf("\nClient with handle %s does not exist\n", handle);
+        printf("$: ");
+        fflush(stdout);
+    } else if (header.flag == SERVER_HANDLE_LIST) {
+        print_handles_list(socket_num, packet);
+        printf("$: ");
+        fflush(stdout);
+    } else if (header.flag == SERVER_ACK_EXIT) {
+        exit(0);
+    }
+}
+
+void watch_for_messages(int socket_num, char *handle) {
+    printf("$: ");
+    fflush(stdout);
+    
+    while (1) {
         int socket_ready = wait_for_message(socket_num);
         if (socket_ready == STDIN_READY) {
             if (handle_user_input(socket_num, handle) < 0) {
                 printf("Invalid command\n");
+                printf("$: ");
+                fflush(stdout);
             }
         } else if (socket_ready == SERVER_READY) {
-            char message[BUFF_SIZE];
-            memset(message, 0, BUFF_SIZE);
+            char packet[BUFF_SIZE];
             
-            int recv_result = recv(socket_num, message, BUFF_SIZE, 0);
+            int recv_result = recv(socket_num, packet, BUFF_SIZE, 0);
             
             if (recv_result < 0) {
                 perror("Couldn't retrieve the message");
             } else if (recv_result == 0) {
-                printf("\nServer disconnected.\n");
-                active = 0;
+                printf("\nServer Terminated\n");
+                exit(-1);
             }
             
-            // handle server messages
+            handle_server_messages(socket_num, packet);
         }
     }
 }
