@@ -79,40 +79,48 @@ int handle_user_input(int socket_num, char *src_handle) {
         return -1;
     }
     
-    char *command = strtok(message, " ");
+    char *cp_msg = strdup(message);
+    char *command = strtok(cp_msg, " ");
+    command = strtok(command, "\n");
     
     if (strcasecmp(command, "%M") == 0) {
+        command = strtok(message, " ");
         char *dst_handle = strtok(NULL, " ");
         char *msg = strtok(NULL, "\n");
+        dst_handle = strtok(dst_handle, "\n");
         
-        if (strcmp(dst_handle, "\n") == 0) {
-            return -1;
-        }
-        char empty_msg[] = "\n";
-        if (msg == NULL) {
-            msg = empty_msg;
-        }
-        if (strlen(msg) > MESSAGE_LENGTH) {
-            printf("Error, message too long, message length is: %lu", strlen(msg));
+        if (dst_handle == NULL) {
+            printf("Error, no handle given\n");
         } else {
-            send_message(socket_num, src_handle, dst_handle, msg);
+            if (msg == NULL) {
+                msg = strdup("\n");
+            }
+            if (strlen(msg) > MESSAGE_LENGTH-1) {
+                printf("Error, message too long, message length is: %lu\n", strlen(msg)+1);
+            } else {
+                send_message(socket_num, src_handle, dst_handle, msg);
+            }
         }
         
         printf("$: ");
         fflush(stdout);
     } else if (strcasecmp(command, "%B") == 0) {
-        // Send empty message!
-        char *msg = strtok(NULL, "");
-        send_broadcast(socket_num, src_handle, msg);
+        command = strtok(message, " ");
+        char *msg = strtok(NULL, "\n");
         
+        if (msg == NULL) {
+            msg = strdup("\n");
+        }
+        
+        send_broadcast(socket_num, src_handle, msg);
         printf("$: ");
         fflush(stdout);
-    } else if (strcasecmp(strtok(command, "\n"), "%L") == 0) {
+    } else if (strcasecmp(command, "%L") == 0) {
         send_request(socket_num, CLIENT_HANDLE_REQUEST);
         
         printf("$: ");
         fflush(stdout);
-    } else if (strcasecmp(strtok(command, "\n"), "%E") == 0) {
+    } else if (strcasecmp(command, "%E") == 0) {
         send_request(socket_num, CLIENT_EXIT_REQUEST);
     } else {
         return -1;
@@ -159,7 +167,7 @@ void print_message(char *packet) {
                         + dst_handle_length + HANDLE_LENGTH), src_handle_length);
     src_handle[src_handle_length] = '\0';
     
-    char *message = (packet + HEADER_LENGTH + HANDLE_LENGTH + src_handle_length
+    char *message = (packet + HEADER_LENGTH + HANDLE_LENGTH + dst_handle_length
                      + HANDLE_LENGTH + src_handle_length);
     
     printf("\n%s: %s\n", src_handle, message);
@@ -167,6 +175,7 @@ void print_message(char *packet) {
 
 void print_handles_list(int socket_num, char *packet) {
     uint32_t num_handles = *(packet + HEADER_LENGTH);
+    printf("\n");
     
     uint8_t i=0;
     for (i=0; i<num_handles; i++) {

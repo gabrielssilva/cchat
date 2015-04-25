@@ -69,12 +69,13 @@ void handle_message_packet(char *packet, int src_socket, struct clients_t *clien
     uint8_t src_handle_length = *(packet + HEADER_LENGTH + dst_handle_length);
     
     int offset = HEADER_LENGTH + HANDLE_LENGTH + dst_handle_length;
+    char *message = (packet + offset + HANDLE_LENGTH + src_handle_length);
     
-    int response_flag;
+    int response_flag = -1;
     int dst_sokect_num;
     if ((dst_sokect_num = get_client_socket(clients, dst_handle, dst_handle_length)) < 0) {
         response_flag = SERVER_HANDLE_ERROR;
-    } else {
+    } else if (strlen(message) < MESSAGE_LENGTH) {
         int fwd_offset = offset + HANDLE_LENGTH + src_handle_length + MESSAGE_LENGTH;
         send(dst_sokect_num, packet, fwd_offset, 0);
         response_flag = SERVER_HANDLE_OK;
