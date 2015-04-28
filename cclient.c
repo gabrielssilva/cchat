@@ -93,7 +93,7 @@ int handle_user_input(int socket_num, char *src_handle) {
                 msg = strdup("\n");
             }
             if (strlen(msg) > MESSAGE_LENGTH-1) {
-                printf("Error, message too long, message length is: %lu\n", strlen(msg)+1);
+                printf("Error, message too long, message length is: %d\n", strlen(msg)+1);
             } else {
                 send_message(socket_num, src_handle, dst_handle, msg);
             }
@@ -108,7 +108,7 @@ int handle_user_input(int socket_num, char *src_handle) {
             msg = strdup("\n");
         }
         if (strlen(msg) > MESSAGE_LENGTH-1) {
-            printf("Error, message too long, message length is: %lu\n", strlen(msg)+1);
+            printf("Error, message too long, message length is: %d\n", strlen(msg)+1);
         } else {
             send_broadcast(socket_num, src_handle, msg);
         }
@@ -320,11 +320,13 @@ int main(int argc, char **argv) {
     }
     
     if (strlen(argv[1]) > HANDLE_MAX_LENGTH) {
-        printf("Error, handle too long, handle length is: %lu\n", strlen(argv[1]));
+        printf("Error, handle too long, handle length is: %d\n", strlen(argv[1]));
         exit(-1);
     }
     
     int socket_num = get_client_socket();
     connect_to_server(socket_num, argv[1], argv[2], argv[3]);
     watch_for_messages(socket_num, argv[1]);
+    
+    return 0;
 }

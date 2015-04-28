@@ -28,7 +28,7 @@ void send_simple_packet(int socket_num, uint8_t flag) {
 int get_client_socket(struct clients_t *clients, char *handle, uint8_t handle_length) {
     struct client_t *temp = clients->client;
     while (temp != NULL) {
-        if (strcmp(strndup(handle, handle_length), temp->handle) == 0) {
+        if (strcasecmp(strndup(handle, handle_length), temp->handle) == 0) {
             return temp->fd;
         }
         temp = temp->next;
@@ -41,7 +41,8 @@ int check_handle(int socket_num, char *packet, struct clients_t *clients) {
     uint8_t handle_length = *(packet + HEADER_LENGTH);
     char *handle = (packet + HEADER_LENGTH + HANDLE_LENGTH);
     
-    if (get_client_socket(clients, handle, handle_length) < 0) {
+    if (handle_length <= HANDLE_MAX_LENGTH
+        && get_client_socket(clients, handle, handle_length) < 0) {
         add_handle(&clients, socket_num, handle, handle_length);
         return SERVER_ACCEPT_HANDLE;
     } else {
@@ -256,5 +257,5 @@ int main(int argc, char **argv) {
     
     watch_for_clients(socket_num);
     
-    close(socket_num);
+    return 0;
 }
